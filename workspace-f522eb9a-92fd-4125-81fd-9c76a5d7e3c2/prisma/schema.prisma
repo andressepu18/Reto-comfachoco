@@ -1,0 +1,175 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String      @id @default(cuid())
+  email        String      @unique
+  name         String?
+  password     String?
+  role         UserRole    @default(EMPLOYEE)
+  employeeType EmployeeType @default(ADMINISTRATIVE)
+  departmentId String?
+  supervisorId String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  department   Department?  @relation(fields: [departmentId], references: [id])
+  supervisor   User?        @relation("SupervisorEmployee", fields: [supervisorId], references: [id])
+  employees    User[]       @relation("SupervisorEmployee")
+  leaveRequests LeaveRequest[]
+  leaveBalances LeaveBalance[]
+  approvals    Approval[]
+
+  @@map("users")
+}
+
+model Department {
+  id          String @id @default(cuid())
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users User[]
+  
+  @@map("departments")
+}
+
+model LeaveType {
+  id          String     @id @default(cuid())
+  name        String
+  description String?
+  requiresApproval Boolean @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  leaveRequests LeaveRequest[]
+  leavePolicies LeavePolicy[]
+  
+  @@map("leave_types")
+}
+
+model LeavePolicy {
+  id          String     @id @default(cuid())
+  name        String
+  description String?
+  daysAllowed Int        // Total days allowed per year
+  employeeType EmployeeType
+  leaveTypeId String
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  leaveType LeaveType @relation(fields: [leaveTypeId], references: [id])
+  leaveBalances LeaveBalance[]
+  
+  @@map("leave_policies")
+}
+
+model LeaveBalance {
+  id             String    @id @default(cuid())
+  userId         String
+  leavePolicyId  String
+  totalDays      Int       // Total days for the period
+  usedDays       Int       @default(0)
+  remainingDays  Int       // Computed field
+  year           Int       // Year for this balance
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  user     User        @relation(fields: [userId], references: [id])
+  policy   LeavePolicy @relation(fields: [leavePolicyId], references: [id])
+
+  @@map("leave_balances")
+}
+
+model LeaveRequest {
+  id          String        @id @default(cuid())
+  userId      String
+  leaveTypeId String
+  startDate   DateTime
+  endDate     DateTime
+  totalDays   Int
+  reason      String?
+  status      RequestStatus @default(PENDING)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id])
+  leaveType LeaveType @relation(fields: [leaveTypeId], references: [id])
+  approvals Approval[]
+
+  @@map("leave_requests")
+}
+
+model Approval {
+  id            String        @id @default(cuid())
+  leaveRequestId String
+  approverId    String
+  status        ApprovalStatus @default(PENDING)
+  comments      String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  leaveRequest LeaveRequest @relation(fields: [leaveRequestId], references: [id])
+  approver     User         @relation(fields: [approverId], references: [id])
+
+  @@map("approvals")
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  title     String
+  message   String
+  type      NotificationType
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  @@map("notifications")
+}
+
+enum UserRole {
+  EMPLOYEE
+  SUPERVISOR
+  HR_ADMIN
+  ADMIN
+}
+
+enum EmployeeType {
+  ADMINISTRATIVE
+  OPERATIVE
+  EXECUTIVE
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum NotificationType {
+  LEAVE_REQUEST
+  APPROVAL_NEEDED
+  REQUEST_APPROVED
+  REQUEST_REJECTED
+  SYSTEM
+}
